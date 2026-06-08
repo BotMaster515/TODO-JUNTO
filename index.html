@@ -773,11 +773,6 @@
     </div>
 
     <div class="field-group">
-      <div class="field-label">Código de sala</div>
-      <input class="field-input" id="code-input" type="text" placeholder="ej: BG19P1" maxlength="10" autocomplete="off" />
-    </div>
-
-    <div class="field-group">
       <div class="field-label">Clave</div>
       <input class="field-input" id="key-input" type="number" min="1" max="99" placeholder="ej: 3" autocomplete="off" />
       <div class="field-hint">→ número de veces que se aplica el cifrado César</div>
@@ -799,7 +794,7 @@
 ══════════════════════════════════════════════════════════ -->
 <div class="page hidden" id="page-chat">
   <div id="chat-header">
-    <div id="chat-room">sala: <span id="chat-room-code">——</span></div>
+    <div id="chat-room">lobby principal</div>
     <div id="chat-status">
       <div id="badge-dot2" style="width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex-shrink:0;"></div>
       <span id="chat-conn-text">conectado</span>
@@ -883,12 +878,12 @@
     </div>
   </div>
 
-  <!-- Top derecha: código de sala -->
+  <!-- Top derecha: estado de conexión -->
   <div id="room-badge">
     <div id="room-dot" class="connecting"></div>
     <div id="badge-inner">
-      <span id="room-label-small">sala</span>
-      <span id="room-code">——</span>
+      <span id="room-label-small">estado</span>
+      <span id="room-code" style="font-size:13px;letter-spacing:2px;">iniciando...</span>
     </div>
   </div>
 
@@ -971,21 +966,15 @@
   const connectBtn  = document.getElementById('connect-btn');
   const errorMsg    = document.getElementById('error-msg');
   const nameInput   = document.getElementById('name-input');
-  const codeInput   = document.getElementById('code-input');
   const keyInput    = document.getElementById('key-input');
   const sendBtn     = document.getElementById('send-btn');
   const msgInput    = document.getElementById('msg-input');
   const charCounter = document.getElementById('char-counter');
   const sentFeed    = document.getElementById('sent-feed');
   const emptyFeed   = document.getElementById('empty-feed');
-  const chatRoomCode = document.getElementById('chat-room-code');
 
-  // Leer código de sala desde la URL (?sala=XXXXXX)
-  (function readSalaFromURL() {
-    const params = new URLSearchParams(window.location.search);
-    const sala   = params.get('sala');
-    if (sala) codeInput.value = sala.toUpperCase();
-  })();
+  // ID fijo del lobby — el mismo que usa el host
+  const LOBBY_ID = 'sala-LOBBY-VINCULO-01';
 
   const ICE_SERVERS = [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -1011,9 +1000,9 @@
   peer.on('error', (err) => {
     if (err.type === 'peer-unavailable') {
       badgeDot.className = 'error';
-      badgeText.textContent = 'no encontrado';
+      badgeText.textContent = 'no disponible';
       connectBtn.disabled = false;
-      showError('Sala no encontrada. Verifica que el host esté activo.');
+      showError('El lobby no está activo. Abre la Pantalla Principal primero.');
       return;
     }
     if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
@@ -1039,17 +1028,12 @@
     const ok = peerReady
       && nameInput.value.trim().length > 0
       && keyInput.value.trim().length > 0
-      && parseInt(keyInput.value) >= 1
-      && codeInput.value.trim().length >= 4;
+      && parseInt(keyInput.value) >= 1;
     connectBtn.disabled = !ok;
   }
 
   nameInput.addEventListener('input', updateConnectBtn);
   keyInput.addEventListener('input', updateConnectBtn);
-  codeInput.addEventListener('input', () => {
-    codeInput.value = codeInput.value.toUpperCase();
-    updateConnectBtn();
-  });
 
   function showError(msg) {
     errorMsg.textContent = msg;
@@ -1057,35 +1041,33 @@
   }
 
   function connectToHost() {
-    const code = codeInput.value.trim().toUpperCase();
     const name = nameInput.value.trim();
     const key  = parseInt(keyInput.value);
-    if (!code || !name || isNaN(key) || key < 1) return;
+    if (!name || isNaN(key) || key < 1) return;
 
     myName = name;
     myKey  = key;
-    const roomId = 'sala-' + code;
 
     connectBtn.disabled = true;
     badgeDot.className = 'loading';
     badgeText.textContent = 'conectando...';
     errorMsg.textContent = '';
 
-    conn = peer.connect(roomId, { reliable: true });
+    conn = peer.connect(LOBBY_ID, { reliable: true });
 
     const timeout = setTimeout(() => {
       if (!conn || conn.open === false) {
         badgeDot.className = 'error';
         badgeText.textContent = 'no encontrado';
         connectBtn.disabled = false;
-        showError('No se pudo conectar. Intenta de nuevo.');
+        showError('No se pudo conectar. Verifica que la pantalla principal esté activa.');
         if (conn) conn.close();
       }
     }, 20000);
 
     conn.on('open', () => {
       clearTimeout(timeout);
-      switchToChat(code);
+      switchToChat();
     });
 
     conn.on('data', (data) => {
@@ -1111,9 +1093,8 @@
     });
   }
 
-  function switchToChat(code) {
+  function switchToChat() {
     showPage('page-chat');
-    chatRoomCode.textContent = code;
     sendBtn.disabled = false;
     msgInput.focus();
   }
@@ -1236,12 +1217,10 @@
   }
 
   function initLobbyPeer() {
-    const roomId = 'sala-' + Math.random().toString(36).substr(2, 6).toUpperCase();
-    lobbyPeer = new Peer(roomId, { debug: 0 });
+    lobbyPeer = new Peer(LOBBY_ID, { debug: 0 });
 
-    lobbyPeer.on('open', id => {
-      const code = id.replace('sala-', '');
-      roomCodeEl.textContent = code;
+    lobbyPeer.on('open', () => {
+      roomCodeEl.textContent = 'en línea';
       roomDotEl.className = 'online';
     });
 
@@ -1265,7 +1244,16 @@
       c.on('error',  () => { delete lobbyConns[pid]; connCountEl.textContent = Math.max(0, --lobbyConnCount); });
     });
 
-    lobbyPeer.on('error', () => { roomDotEl.className = 'connecting'; });
+    lobbyPeer.on('error', err => {
+      if (err.type === 'unavailable-id') {
+        // Ya hay un host activo con este ID — está bien, el lobby está en línea
+        roomCodeEl.textContent = 'en línea';
+        roomDotEl.className = 'online';
+      } else {
+        roomDotEl.className = 'connecting';
+        roomCodeEl.textContent = 'error';
+      }
+    });
   }
 
   const normalizeText = t => String(t).toLowerCase().trim();

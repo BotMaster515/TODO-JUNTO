@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cifrado César</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c26;
+    --accent: #35b8f1;
+    --accent-dark: #1e7aaa;
+    --text: #f0ece4;
+    --muted: #555560;
+    --border: rgba(255,255,255,0.08);
+    --bubble-bg: rgba(53,184,241,0.06);
+    --bubble-border: rgba(53,184,241,0.22);
+    --line-color: rgba(53,184,241,0.38);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    overflow: hidden;
+  }
+
+  /* ── Páginas ─────────────────────────────────────────────── */
+  .page {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    max-width: 430px;
+    margin: 0 auto;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+
+  .page.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(40px);
+  }
+
+  /* La página lobby no tiene max-width */
+  #page-lobby {
+    max-width: none;
+  }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  .page-header {
+    padding: 20px 20px 16px;
+    border-bottom: 0.5px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .back-btn {
+    background: none;
+    border: none;
+    color: rgba(53,184,241,0.6);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 2px 6px 2px 0;
+    font-family: 'Space Mono', monospace;
+    transition: color 0.2s;
+    flex-shrink: 0;
+  }
+  .back-btn:hover { color: var(--accent); }
+
+  .header-titles { display: flex; flex-direction: column; gap: 2px; }
+
+  #header-title, .page-header-title {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: rgba(240,236,228,0.3);
+    font-family: 'Space Mono', monospace;
+  }
+
+  #header-sub, .page-header-sub {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.1;
+  }
+
+  /* ── Campos genéricos ───────────────────────────────────── */
+  .field-group {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .field-label {
+    font-size: 11px;
+    color: rgba(240,236,228,0.4);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .field-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 16px;
+    font-family: 'Space Mono', monospace;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+    -webkit-appearance: none;
+    letter-spacing: 2px;
+  }
+  .field-input::placeholder { color: var(--muted); letter-spacing: 1px; }
+  .field-input:focus { border-color: var(--accent); background: var(--surface2); }
+
+  #code-input {
+    font-size: 16px;
+    letter-spacing: 6px;
+    font-weight: 50;
+  }
+
+  /* ── Botones ────────────────────────────────────────────── */
+  .btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 12px;
+    border: none;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.35; pointer-events: none; }
+  .btn-primary { background: var(--accent); color: #0a0a0f; }
+  .btn-secondary {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid rgba(53,184,241,0.3);
+  }
+
+  /* ── Status badge ───────────────────────────────────────── */
+  #status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-family: 'Space Mono', monospace;
+    color: rgba(240,236,228,0.4);
+    padding: 8px 14px;
+    background: var(--surface);
+    border-radius: 20px;
+    border: 0.5px solid var(--border);
+  }
+
+  #badge-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.4s;
+    flex-shrink: 0;
+  }
+  #badge-dot.online  { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  #badge-dot.error   { background: #e25a5a; }
+  #badge-dot.loading { background: #f5a623; animation: pulse 0.9s infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── Hint de clave ──────────────────────────────────────── */
+  .field-hint {
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    color: rgba(53,184,241,0.4);
+    letter-spacing: 1px;
+    margin-top: -2px;
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     PÁGINA 1 — Conexión
+  ══════════════════════════════════════════════════════════ */
+  #page-connect { background: var(--bg); }
+
+  #connect-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    gap: 22px;
+    overflow-y: auto;
+  }
+
+  /* Botones secundarios al fondo */
+  #bottom-links {
+    width: 100%;
+    padding: 0 20px 20px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #error-msg {
+    font-size: 12px;
+    color: #e25a5a;
+    font-family: 'Space Mono', monospace;
+    text-align: center;
+    min-height: 18px;
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     PÁGINA 2 — Chat
+  ══════════════════════════════════════════════════════════ */
+  #page-chat { background: var(--bg); }
+
+  #chat-header {
+    padding: 12px 20px;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  #chat-room {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: rgba(240,236,228,0.3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  #chat-room span { color: var(--accent); font-weight: 700; }
+
+  #chat-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: 'Space Mono', monospace;
+    color: rgba(240,236,228,0.4);
+  }
+
+  #sent-feed {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sent-msg {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 12px 12px 4px 12px;
+    padding: 10px 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: rgba(240,236,228,0.8);
+    align-self: flex-end;
+    max-width: 85%;
+    animation: slideIn 0.25s ease forwards;
+  }
+  .sent-msg.sending {
+    border-color: rgba(53,184,241,0.3);
+    background: rgba(53,184,241,0.06);
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  #empty-feed {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 40px;
+    font-family: 'Space Mono', monospace;
+  }
+  #empty-feed-icon { font-size: 32px; margin-bottom: 4px; opacity: 0.4; }
+
+  #chat-input-area {
+    padding: 12px 20px;
+    border-top: 0.5px solid var(--border);
+    background: var(--bg);
+    flex-shrink: 0;
+  }
+  #input-row { display: flex; gap: 10px; align-items: flex-end; }
+
+  #msg-input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: 'Space Mono', monospace;
+    color: var(--text);
+    resize: none;
+    outline: none;
+    min-height: 44px;
+    max-height: 120px;
+    line-height: 1.4;
+    transition: border-color 0.2s;
+    -webkit-appearance: none;
+  }
+  #msg-input::placeholder { color: var(--muted); }
+  #msg-input:focus { border-color: rgba(53,184,241,0.4); }
+
+  #send-btn {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  #send-btn:active { transform: scale(0.93); }
+  #send-btn:disabled { opacity: 0.3; pointer-events: none; }
+  #send-btn svg { width: 20px; height: 20px; fill: #0a0a0f; }
+
+  #char-counter {
+    font-size: 11px;
+    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    text-align: right;
+    margin-top: 6px;
+  }
+  #char-counter.warn { color: #f5a623; }
+  #char-counter.over { color: #e25a5a; }
+
+  /* Mensajes recibidos */
+  .recv-msg {
+    background: var(--surface2);
+    border: 0.5px solid rgba(123,94,167,0.25);
+    border-radius: 12px 12px 12px 4px;
+    padding: 10px 14px;
+    align-self: flex-start;
+    max-width: 85%;
+    animation: slideIn 0.25s ease forwards;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.25s, background 0.25s;
+    user-select: none;
+  }
+  .recv-msg:active { transform: scale(0.98); }
+  .recv-msg.revealed {
+    border-color: rgba(53,184,241,0.3);
+    background: rgba(53,184,241,0.04);
+  }
+  .recv-name {
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    color: rgba(123,94,167,0.9);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    transition: color 0.25s;
+  }
+  .recv-msg.revealed .recv-name { color: rgba(53,184,241,0.6); }
+  .recv-ciphered {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    color: rgba(240,236,228,0.45);
+    letter-spacing: 1px;
+    word-break: break-word;
+  }
+  .recv-msg.revealed .recv-ciphered { display: none; }
+  .recv-deciphered {
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.4;
+    word-break: break-word;
+    display: none;
+  }
+  .recv-msg.revealed .recv-deciphered { display: block; }
+  .recv-hint {
+    font-size: 9px;
+    font-family: 'Space Mono', monospace;
+    color: rgba(240,236,228,0.18);
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+  .recv-msg.revealed .recv-hint { display: none; }
+
+  /* ══════════════════════════════════════════════════════════
+     PÁGINA 3 — Decodificador
+  ══════════════════════════════════════════════════════════ */
+  #page-decoder { background: var(--bg); }
+
+  #decoder-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 20px;
+    gap: 22px;
+    overflow-y: auto;
+  }
+
+  .decoder-desc {
+    font-size: 12px;
+    font-family: 'Space Mono', monospace;
+    color: rgba(240,236,228,0.3);
+    line-height: 1.7;
+    letter-spacing: 0.5px;
+    border-left: 2px solid rgba(53,184,241,0.25);
+    padding-left: 12px;
+  }
+
+  #decode-result-box {
+    background: var(--surface);
+    border: 1px solid rgba(53,184,241,0.2);
+    border-radius: 12px;
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 80px;
+    transition: border-color 0.3s, background 0.3s;
+  }
+  #decode-result-box.has-result {
+    border-color: rgba(53,184,241,0.5);
+    background: rgba(53,184,241,0.05);
+  }
+
+  .result-label {
+    font-size: 9px;
+    font-family: 'Space Mono', monospace;
+    color: rgba(53,184,241,0.45);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  #decode-result-text {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--text);
+    word-break: break-word;
+    line-height: 1.2;
+    min-height: 30px;
+  }
+
+  #decode-result-text.empty {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+  }
+
+  input[type=number].field-input {
+    -moz-appearance: textfield;
+  }
+  input[type=number].field-input::-webkit-inner-spin-button,
+  input[type=number].field-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     PÁGINA 4 — Lobby (pantalla de burbujas)
+  ══════════════════════════════════════════════════════════ */
+  #page-lobby {
+    background: var(--bg);
+    max-width: none;
+  }
+
+  /* Subtle grid background para lobby */
+  #page-lobby::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(53,184,241,0.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(53,184,241,0.022) 1px, transparent 1px);
+    background-size: 64px 64px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Top-right room code badge ───────────────────────────── */
+  #room-badge {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 200;
+    background: rgba(10,10,15,0.75);
+    border: 0.5px solid rgba(53,184,241,0.2);
+    border-radius: 8px;
+    padding: 8px 16px 8px 12px;
+    backdrop-filter: blur(12px);
+  }
+
+  #room-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+    transition: background 0.4s, box-shadow 0.4s;
+  }
+  #room-dot.online     { background: var(--accent); box-shadow: 0 0 7px var(--accent); }
+  #room-dot.connecting { background: #f5a623; animation: pulse 1s infinite; }
+
+  #badge-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+
+  #room-label-small {
+    font-family: 'Space Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 3px;
+    color: rgba(53,184,241,0.45);
+    text-transform: uppercase;
+    line-height: 1;
+  }
+
+  #room-code {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 6px;
+    line-height: 1;
+  }
+
+  /* ── Top-left: QR + botón volver ────────────────────────── */
+  #lobby-top-left {
+    position: absolute;
+    top: 16px;
+    left: 20px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  #back-lobby-btn {
+    background: rgba(10,10,15,0.75);
+    border: 0.5px solid rgba(53,184,241,0.2);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: rgba(53,184,241,0.7);
+    cursor: pointer;
+    backdrop-filter: blur(12px);
+    transition: color 0.2s, border-color 0.2s;
+    letter-spacing: 1px;
+  }
+  #back-lobby-btn:hover { color: var(--accent); border-color: rgba(53,184,241,0.5); }
+
+  #qr-badge {
+    background: rgba(10,10,15,0.75);
+    border: 0.5px solid rgba(53,184,241,0.2);
+    border-radius: 10px;
+    padding: 10px;
+    backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  #qr-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 7px;
+    letter-spacing: 2.5px;
+    color: rgba(53,184,241,0.45);
+    text-transform: uppercase;
+    line-height: 1;
+  }
+
+  #qr-img {
+    width: 110px;
+    height: 110px;
+    border-radius: 6px;
+    display: block;
+    object-fit: contain;
+  }
+
+  #qr-placeholder {
+    width: 110px;
+    height: 110px;
+    border-radius: 6px;
+    border: 1.5px dashed rgba(53,184,241,0.3);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  #qr-placeholder:hover {
+    border-color: rgba(53,184,241,0.7);
+    background: rgba(53,184,241,0.06);
+  }
+  #qr-placeholder-icon { font-size: 22px; opacity: 0.4; }
+  #qr-placeholder-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 7px;
+    letter-spacing: 1.5px;
+    color: rgba(53,184,241,0.4);
+    text-transform: uppercase;
+    text-align: center;
+    line-height: 1.5;
+  }
+  #qr-file-input { display: none; }
+
+  /* ── Bottom connection count ─────────────────────────────── */
+  #conn-badge {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    z-index: 200;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: rgba(240,236,228,0.3);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #conn-count { color: var(--accent); font-weight: 700; font-size: 14px; }
+
+  /* ── Waiting message ────────────────────────────────────── */
+  #waiting-msg {
+    position: absolute;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: rgba(53,184,241,0.3);
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 2px;
+    white-space: nowrap;
+    animation: fadeWait 2.5s ease-in-out infinite;
+    z-index: 100;
+  }
+  @keyframes fadeWait { 0%,100%{opacity:0.3} 50%{opacity:0.8} }
+
+  /* ── Canvas burbujas ─────────────────────────────────────── */
+  #bubble-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+
+  svg#lines {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* ── Bubbles ────────────────────────────────────────────── */
+  .bubble {
+    position: absolute;
+    border-radius: 50%;
+    border: 1.5px solid var(--bubble-border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bubble-bg);
+    transform: translate(-50%, -50%);
+    backdrop-filter: blur(8px);
+    text-align: center;
+    pointer-events: none;
+    z-index: 10;
+    transition: border-color 0.5s, box-shadow 0.5s, background 0.5s;
+    will-change: left, top;
+  }
+
+  .bubble.connected {
+    border-color: rgba(53,184,241,0.65);
+    background: rgba(53,184,241,0.09);
+    box-shadow: 0 0 22px rgba(53,184,241,0.14), inset 0 0 18px rgba(53,184,241,0.04);
+  }
+
+  .bubble .b-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 1.5px;
+    color: rgba(53,184,241,0.55);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    line-height: 1;
+  }
+
+  .bubble .b-text {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+    word-break: break-word;
+    padding: 0 10px;
+  }
+
+  @keyframes popIn {
+    0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.35); }
+    70%  { opacity: 1; transform: translate(-50%,-50%) scale(1.06); }
+    100% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+  }
+  .bubble { animation: popIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+  .cline {
+    stroke: var(--line-color);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     PÁGINA 1 — Conexión
+══════════════════════════════════════════════════════════ -->
+<div class="page" id="page-connect">
+  <div id="connect-body">
+    <div id="status-badge">
+      <div id="badge-dot" class="loading"></div>
+      <span id="badge-text">iniciando...</span>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Tu nombre</div>
+      <input class="field-input" id="name-input" type="text" placeholder="ej: María" maxlength="20" autocomplete="off" />
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Código de sala</div>
+      <input class="field-input" id="code-input" type="text" placeholder="ej: BG19P1" maxlength="10" autocomplete="off" />
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Clave</div>
+      <input class="field-input" id="key-input" type="number" min="1" max="99" placeholder="ej: 3" autocomplete="off" />
+      <div class="field-hint">→ número de veces que se aplica el cifrado César</div>
+    </div>
+    <div id="error-msg"></div>
+
+    <button class="btn btn-primary" id="connect-btn" disabled onclick="connectToHost()">Conectar</button>
+  </div>
+
+  <!-- Botones al fondo -->
+  <div id="bottom-links">
+    <button class="btn btn-secondary" onclick="showPage('page-decoder')">⌂ Decodificador</button>
+    <button class="btn btn-secondary" onclick="enterLobby()">◎ Pantalla Principal (Lobby)</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PÁGINA 2 — Chat
+══════════════════════════════════════════════════════════ -->
+<div class="page hidden" id="page-chat">
+  <div id="chat-header">
+    <div id="chat-room">sala: <span id="chat-room-code">——</span></div>
+    <div id="chat-status">
+      <div id="badge-dot2" style="width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);flex-shrink:0;"></div>
+      <span id="chat-conn-text">conectado</span>
+    </div>
+  </div>
+
+  <div id="sent-feed">
+    <div id="empty-feed">
+      <div id="empty-feed-icon">◎</div>
+      <span>tus mensajes aparecerán<br>en la pantalla principal</span>
+    </div>
+  </div>
+
+  <div id="chat-input-area">
+    <div id="input-row">
+      <textarea id="msg-input" placeholder="Escribe algo..." rows="1" maxlength="30"></textarea>
+      <button id="send-btn" onclick="sendMessage()" disabled title="Enviar">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z"/>
+        </svg>
+      </button>
+    </div>
+    <div id="char-counter">0 / 30</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PÁGINA 3 — Decodificador
+══════════════════════════════════════════════════════════ -->
+<div class="page hidden" id="page-decoder">
+  <div class="page-header">
+    <button class="back-btn" onclick="showPage('page-connect')">←</button>
+    <div class="header-titles">
+      <div class="page-header-title">herramienta</div>
+      <div class="page-header-sub">Decodificador</div>
+    </div>
+  </div>
+
+  <div id="decoder-body">
+    <div class="decoder-desc">
+      Escribe la palabra cifrada que aparece en la pantalla del host y la clave que usó quien la envió. El decodificador revertirá el proceso y mostrará la palabra original.
+    </div>
+
+    <div id="decode-result-box">
+      <div class="result-label">Resultado</div>
+      <div id="decode-result-text" class="empty">aquí aparecerá la palabra original...</div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Palabra cifrada</div>
+      <input class="field-input" id="decode-word" type="text" placeholder="ej: AOVVY" autocomplete="off" oninput="liveDecoder()" />
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Clave (número de veces)</div>
+      <input class="field-input" id="decode-key" type="number" min="1" max="99" placeholder="ej: 3" autocomplete="off" oninput="liveDecoder()" />
+      <div class="field-hint">→ la misma clave que usó quien envió el mensaje</div>
+    </div>
+
+    <!-- Botón para ir al lobby desde el decodificador -->
+    <button class="btn btn-secondary" onclick="enterLobby()" style="margin-top:8px;">◎ Ir al Lobby</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PÁGINA 4 — Lobby (burbujas)
+══════════════════════════════════════════════════════════ -->
+<div class="page hidden" id="page-lobby">
+
+  <!-- Top izquierda: botón volver + QR -->
+  <div id="lobby-top-left">
+    <button id="back-lobby-btn" onclick="showPage('page-connect')">← Volver</button>
+    <input type="file" id="qr-file-input" accept="image/*" onchange="loadQRImage(event)" />
+    <div id="qr-badge" onclick="document.getElementById('qr-file-input').click()" title="Clic para cambiar el QR">
+      <div id="qr-placeholder">
+        <div id="qr-placeholder-icon">⊕</div>
+        <div id="qr-placeholder-text">subir<br>QR</div>
+      </div>
+      <img id="qr-img" src="" alt="QR" style="display:none;" />
+      <span id="qr-label">escanear para unirse</span>
+    </div>
+  </div>
+
+  <!-- Top derecha: código de sala -->
+  <div id="room-badge">
+    <div id="room-dot" class="connecting"></div>
+    <div id="badge-inner">
+      <span id="room-label-small">sala</span>
+      <span id="room-code">——</span>
+    </div>
+  </div>
+
+  <!-- Contador de conectados -->
+  <div id="conn-badge">
+    <span id="conn-count">0</span>
+    <span>conectados</span>
+  </div>
+
+  <!-- Canvas de burbujas -->
+  <div id="bubble-canvas">
+    <svg id="lines"></svg>
+  </div>
+
+  <div id="waiting-msg">esperando mensajes...</div>
+</div>
+
+<script>
+  // ══════════════════════════════════════════════════════════
+  //  NAVEGACIÓN
+  // ══════════════════════════════════════════════════════════
+  function showPage(id) {
+    document.querySelectorAll('.page').forEach(p => {
+      p.classList.toggle('hidden', p.id !== id);
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  CIFRADO CÉSAR
+  // ══════════════════════════════════════════════════════════
+  function cesarCipher(str, key) {
+    const shift = key % 26;
+    return applyShift(str, shift);
+  }
+
+  function cesarDecipher(str, key) {
+    const shift = key % 26;
+    return applyShift(str, (26 - shift) % 26);
+  }
+
+  function applyShift(str, shift) {
+    return String(str).split('').map(c => {
+      if (c >= 'A' && c <= 'Z') return String.fromCharCode(((c.charCodeAt(0) - 65 + shift) % 26) + 65);
+      if (c >= 'a' && c <= 'z') return String.fromCharCode(((c.charCodeAt(0) - 97 + shift) % 26) + 97);
+      if (c >= '0' && c <= '9') return String.fromCharCode(((c.charCodeAt(0) - 48 + shift) % 10) + 48);
+      return c;
+    }).join('');
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  DECODIFICADOR EN VIVO
+  // ══════════════════════════════════════════════════════════
+  function liveDecoder() {
+    const word = document.getElementById('decode-word').value.trim();
+    const key  = parseInt(document.getElementById('decode-key').value);
+    const box  = document.getElementById('decode-result-box');
+    const out  = document.getElementById('decode-result-text');
+
+    if (!word || isNaN(key) || key < 1) {
+      box.classList.remove('has-result');
+      out.textContent = 'aquí aparecerá la palabra original...';
+      out.className = 'empty';
+      return;
+    }
+
+    const result = cesarDecipher(word, key);
+    box.classList.add('has-result');
+    out.textContent = result;
+    out.className = '';
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  CLIENTE — PeerJS
+  // ══════════════════════════════════════════════════════════
+  let peer = null, conn = null, myName = '', myKey = 1, peerReady = false;
+  const MAX_CHARS = 30;
+
+  const badgeDot    = document.getElementById('badge-dot');
+  const badgeText   = document.getElementById('badge-text');
+  const connectBtn  = document.getElementById('connect-btn');
+  const errorMsg    = document.getElementById('error-msg');
+  const nameInput   = document.getElementById('name-input');
+  const codeInput   = document.getElementById('code-input');
+  const keyInput    = document.getElementById('key-input');
+  const sendBtn     = document.getElementById('send-btn');
+  const msgInput    = document.getElementById('msg-input');
+  const charCounter = document.getElementById('char-counter');
+  const sentFeed    = document.getElementById('sent-feed');
+  const emptyFeed   = document.getElementById('empty-feed');
+  const chatRoomCode = document.getElementById('chat-room-code');
+
+  // Leer código de sala desde la URL (?sala=XXXXXX)
+  (function readSalaFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const sala   = params.get('sala');
+    if (sala) codeInput.value = sala.toUpperCase();
+  })();
+
+  const ICE_SERVERS = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'turn:openrelay.metered.ca:80',  username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+  ];
+
+  function makePeer() {
+    return new Peer({ debug: 0, config: { iceServers: ICE_SERVERS, iceCandidatePoolSize: 10 } });
+  }
+
+  peer = makePeer();
+
+  peer.on('open', () => {
+    peerReady = true;
+    badgeDot.className = 'online';
+    badgeText.textContent = 'listo para conectar';
+    updateConnectBtn();
+  });
+
+  peer.on('error', (err) => {
+    if (err.type === 'peer-unavailable') {
+      badgeDot.className = 'error';
+      badgeText.textContent = 'no encontrado';
+      connectBtn.disabled = false;
+      showError('Sala no encontrada. Verifica que el host esté activo.');
+      return;
+    }
+    if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
+      badgeDot.className = 'loading';
+      badgeText.textContent = 'reintentando...';
+      setTimeout(() => {
+        peer = makePeer();
+        peer.on('open', () => {
+          peerReady = true;
+          badgeDot.className = 'online';
+          badgeText.textContent = 'listo para conectar';
+          updateConnectBtn();
+        });
+      }, 2000);
+      return;
+    }
+    badgeDot.className = 'error';
+    badgeText.textContent = 'error de red';
+    showError('Error de conexión. Recarga la página.');
+  });
+
+  function updateConnectBtn() {
+    const ok = peerReady
+      && nameInput.value.trim().length > 0
+      && keyInput.value.trim().length > 0
+      && parseInt(keyInput.value) >= 1
+      && codeInput.value.trim().length >= 4;
+    connectBtn.disabled = !ok;
+  }
+
+  nameInput.addEventListener('input', updateConnectBtn);
+  keyInput.addEventListener('input', updateConnectBtn);
+  codeInput.addEventListener('input', () => {
+    codeInput.value = codeInput.value.toUpperCase();
+    updateConnectBtn();
+  });
+
+  function showError(msg) {
+    errorMsg.textContent = msg;
+    setTimeout(() => { errorMsg.textContent = ''; }, 4000);
+  }
+
+  function connectToHost() {
+    const code = codeInput.value.trim().toUpperCase();
+    const name = nameInput.value.trim();
+    const key  = parseInt(keyInput.value);
+    if (!code || !name || isNaN(key) || key < 1) return;
+
+    myName = name;
+    myKey  = key;
+    const roomId = 'sala-' + code;
+
+    connectBtn.disabled = true;
+    badgeDot.className = 'loading';
+    badgeText.textContent = 'conectando...';
+    errorMsg.textContent = '';
+
+    conn = peer.connect(roomId, { reliable: true });
+
+    const timeout = setTimeout(() => {
+      if (!conn || conn.open === false) {
+        badgeDot.className = 'error';
+        badgeText.textContent = 'no encontrado';
+        connectBtn.disabled = false;
+        showError('No se pudo conectar. Intenta de nuevo.');
+        if (conn) conn.close();
+      }
+    }, 20000);
+
+    conn.on('open', () => {
+      clearTimeout(timeout);
+      switchToChat(code);
+    });
+
+    conn.on('data', (data) => {
+      if (data && data.broadcast && data.text) {
+        addReceivedMessage(data.text, data.name || 'anon');
+      }
+    });
+
+    conn.on('error', (err) => {
+      clearTimeout(timeout);
+      badgeDot.className = 'error';
+      badgeText.textContent = 'error';
+      connectBtn.disabled = false;
+      showError('No se pudo conectar. Intenta de nuevo.');
+    });
+
+    conn.on('close', () => {
+      const d2 = document.getElementById('badge-dot2');
+      const t2 = document.getElementById('chat-conn-text');
+      if (d2) { d2.style.background = '#e25a5a'; d2.style.boxShadow = 'none'; }
+      if (t2) t2.textContent = 'desconectado';
+      sendBtn.disabled = true;
+    });
+  }
+
+  function switchToChat(code) {
+    showPage('page-chat');
+    chatRoomCode.textContent = code;
+    sendBtn.disabled = false;
+    msgInput.focus();
+  }
+
+  // Textarea auto-resize
+  msgInput.addEventListener('input', () => {
+    msgInput.style.height = 'auto';
+    msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
+    const len = msgInput.value.length;
+    charCounter.textContent = `${len} / ${MAX_CHARS}`;
+    charCounter.className = len > 100 ? (len >= MAX_CHARS ? 'over' : 'warn') : '';
+  });
+
+  msgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key >= '0' && e.key <= '9') { e.preventDefault(); }
+  });
+
+  msgInput.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const pasted  = (e.clipboardData || window.clipboardData).getData('text');
+    const cleaned = pasted.replace(/[0-9]/g, '');
+    const start   = msgInput.selectionStart;
+    const end     = msgInput.selectionEnd;
+    const current = msgInput.value;
+    const newVal  = (current.slice(0, start) + cleaned + current.slice(end)).slice(0, MAX_CHARS);
+    msgInput.value = newVal;
+    msgInput.selectionStart = msgInput.selectionEnd = start + cleaned.length;
+    msgInput.dispatchEvent(new Event('input'));
+  });
+
+  function addReceivedMessage(text, name) {
+    if (emptyFeed) emptyFeed.style.display = 'none';
+    const ciphered = cesarCipher(text, myKey);
+    const el = document.createElement('div');
+    el.className = 'recv-msg';
+    el.innerHTML = `
+      <div class="recv-name">${esc(name)}</div>
+      <div class="recv-ciphered">${esc(ciphered)}</div>
+    `;
+    sentFeed.appendChild(el);
+    sentFeed.scrollTop = sentFeed.scrollHeight;
+  }
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function sendMessage() {
+    const text = msgInput.value.trim();
+    if (!text || !conn || !conn.open) return;
+
+    const ciphered = cesarCipher(text, myKey);
+    conn.send({ text: ciphered, original: text.toLowerCase().trim(), name: myName });
+
+    if (emptyFeed) emptyFeed.style.display = 'none';
+    const el = document.createElement('div');
+    el.className = 'sent-msg sending';
+    el.textContent = text;
+    sentFeed.appendChild(el);
+    sentFeed.scrollTop = sentFeed.scrollHeight;
+    setTimeout(() => el.classList.remove('sending'), 600);
+
+    msgInput.value = '';
+    msgInput.style.height = 'auto';
+    charCounter.textContent = `0 / ${MAX_CHARS}`;
+    charCounter.className = '';
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  LOBBY — HOST (burbujas)
+  // ══════════════════════════════════════════════════════════
+  const MAX_BUBBLES = 40;
+  const TOP_PAD     = 56;
+  const BOT_PAD     = 48;
+  const MIN_SPEED   = 0.25;
+  const MAX_SPEED   = 0.85;
+  const DAMPING     = 0.994;
+  const REPEL_K     = 0.55;
+  const ATTRACT_K   = 0.00012;
+
+  let lobbyBubbles  = [];
+  let lobbyLines    = [];
+  let lobbyGroups   = {};
+  let lobbyConns    = {};
+  let lobbyConnCount = 0;
+  let lobbyPeer     = null;
+  let lobbyAnimRunning = false;
+
+  const roomDotEl   = document.getElementById('room-dot');
+  const roomCodeEl  = document.getElementById('room-code');
+  const connCountEl = document.getElementById('conn-count');
+  const bubbleCanvas = document.getElementById('bubble-canvas');
+  const linesEl     = document.getElementById('lines');
+  const waitingMsgEl = document.getElementById('waiting-msg');
+
+  function enterLobby() {
+    showPage('page-lobby');
+    if (!lobbyPeer) initLobbyPeer();
+    if (!lobbyAnimRunning) {
+      lobbyAnimRunning = true;
+      animateLobby();
+    }
+  }
+
+  function loadQRImage(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img         = document.getElementById('qr-img');
+      const placeholder = document.getElementById('qr-placeholder');
+      img.src           = e.target.result;
+      img.style.display = 'block';
+      placeholder.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function initLobbyPeer() {
+    const roomId = 'sala-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+    lobbyPeer = new Peer(roomId, { debug: 0 });
+
+    lobbyPeer.on('open', id => {
+      const code = id.replace('sala-', '');
+      roomCodeEl.textContent = code;
+      roomDotEl.className = 'online';
+    });
+
+    lobbyPeer.on('connection', c => {
+      const pid = c.peer;
+      lobbyConns[pid] = c;
+      connCountEl.textContent = ++lobbyConnCount;
+
+      c.on('data', data => {
+        if (data?.text) {
+          const groupKey = data.original || normalizeText(data.text);
+          addLobbyBubble(data.text, data.name || 'anon', groupKey);
+          for (const [id, pc] of Object.entries(lobbyConns)) {
+            if (id !== pid && pc.open)
+              pc.send({ text: data.text, original: data.original, name: data.name || 'anon', broadcast: true });
+          }
+        }
+      });
+
+      c.on('close',  () => { delete lobbyConns[pid]; connCountEl.textContent = Math.max(0, --lobbyConnCount); });
+      c.on('error',  () => { delete lobbyConns[pid]; connCountEl.textContent = Math.max(0, --lobbyConnCount); });
+    });
+
+    lobbyPeer.on('error', () => { roomDotEl.className = 'connecting'; });
+  }
+
+  const normalizeText = t => String(t).toLowerCase().trim();
+
+  function calcRadius(text) {
+    return Math.max(48, Math.min(100, String(text).length * 4.2 + 40));
+  }
+
+  function randVel() {
+    const spd   = MIN_SPEED + Math.random() * (MAX_SPEED - MIN_SPEED);
+    const angle = Math.random() * Math.PI * 2;
+    return { vx: Math.cos(angle) * spd, vy: Math.sin(angle) * spd };
+  }
+
+  function addLobbyBubble(text, name, groupKey) {
+    waitingMsgEl.style.display = 'none';
+
+    if (lobbyBubbles.length >= MAX_BUBBLES) {
+      const old = lobbyBubbles.shift();
+      old.el?.remove();
+      evictBubble(old);
+    }
+
+    const W  = window.innerWidth;
+    const H  = window.innerHeight;
+    const r  = calcRadius(text);
+    const x  = r + Math.random() * (W - r * 2);
+    const y  = TOP_PAD + r + Math.random() * (H - TOP_PAD - BOT_PAD - r * 2);
+    const { vx, vy } = randVel();
+
+    const el = document.createElement('div');
+    el.className = 'bubble';
+    el.style.cssText = `left:${x}px;top:${y}px;width:${r*2}px;height:${r*2}px`;
+    el.innerHTML = `<div class="b-name">${esc(name)}</div><div class="b-text">${esc(text)}</div>`;
+    bubbleCanvas.appendChild(el);
+
+    const key   = groupKey || normalizeText(text);
+    const entry = { el, x, y, vx, vy, radius: r, text, name, key };
+    lobbyBubbles.push(entry);
+
+    const grp = lobbyGroups[entry.key] || (lobbyGroups[entry.key] = []);
+    for (const peer of grp) {
+      addLobbyLine(entry, peer);
+      entry.el.classList.add('connected');
+      peer.el.classList.add('connected');
+    }
+    grp.push(entry);
+  }
+
+  function evictBubble(b) {
+    lobbyLines = lobbyLines.filter(c => {
+      if (c.a === b || c.b === b) { c.el.remove(); return false; }
+      return true;
+    });
+    const grp = lobbyGroups[b.key];
+    if (grp) {
+      const i = grp.indexOf(b);
+      if (i !== -1) grp.splice(i, 1);
+      if (grp.length === 1) grp[0].el.classList.remove('connected');
+      if (grp.length === 0) delete lobbyGroups[b.key];
+    }
+  }
+
+  function addLobbyLine(a, b) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    el.setAttribute('class', 'cline');
+    linesEl.appendChild(el);
+    lobbyLines.push({ a, b, el });
+  }
+
+  function animateLobby() {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const n = lobbyBubbles.length;
+
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const a = lobbyBubbles[i], b = lobbyBubbles[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d  = Math.hypot(dx, dy) || 0.01;
+        const minD = a.radius + b.radius + 8;
+        if (d < minD) {
+          const f = (minD - d) / d * REPEL_K * 0.012;
+          a.vx -= dx * f;  a.vy -= dy * f;
+          b.vx += dx * f;  b.vy += dy * f;
+        }
+      }
+    }
+
+    for (const c of lobbyLines) {
+      const { a, b } = c;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d  = Math.hypot(dx, dy) || 0.01;
+      const restDist = a.radius + b.radius + 60;
+      if (d > restDist) {
+        a.vx += dx * ATTRACT_K;  a.vy += dy * ATTRACT_K;
+        b.vx -= dx * ATTRACT_K;  b.vy -= dy * ATTRACT_K;
+      }
+    }
+
+    for (const b of lobbyBubbles) {
+      b.vx *= DAMPING;
+      b.vy *= DAMPING;
+
+      let spd = Math.hypot(b.vx, b.vy) || MIN_SPEED;
+      if (spd < MIN_SPEED) { const s = MIN_SPEED / spd; b.vx *= s; b.vy *= s; }
+      if (spd > MAX_SPEED) { const s = MAX_SPEED / spd; b.vx *= s; b.vy *= s; }
+
+      b.x += b.vx;
+      b.y += b.vy;
+
+      if (b.x - b.radius < 0)        { b.x = b.radius;        b.vx =  Math.abs(b.vx); }
+      if (b.x + b.radius > W)        { b.x = W - b.radius;    b.vx = -Math.abs(b.vx); }
+      if (b.y - b.radius < TOP_PAD)  { b.y = TOP_PAD+b.radius; b.vy = Math.abs(b.vy); }
+      if (b.y + b.radius > H)        { b.y = H - b.radius;    b.vy = -Math.abs(b.vy); }
+
+      b.el.style.left = b.x + 'px';
+      b.el.style.top  = b.y + 'px';
+    }
+
+    for (const c of lobbyLines) {
+      const { a, b } = c;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d  = Math.hypot(dx, dy) || 0.01;
+      const nx = dx / d, ny = dy / d;
+      c.el.setAttribute('x1', a.x + nx * a.radius);
+      c.el.setAttribute('y1', a.y + ny * a.radius);
+      c.el.setAttribute('x2', b.x - nx * b.radius);
+      c.el.setAttribute('y2', b.y - ny * b.radius);
+    }
+
+    requestAnimationFrame(animateLobby);
+  }
+</script>
+</body>
+</html>
